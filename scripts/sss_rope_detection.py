@@ -39,26 +39,26 @@ class sss_detection:
     def detect_rope(self):
         image = np.copy(self.sss_img[:self.effective_height, :])
         image = cv2.Canny(image, 100, 150)
-        lines = cv2.HoughLines(image,
-                               1,
-                               np.pi / 180,
-                               50,
-                               min_theta=0,
-                               max_theta=np.pi / 180 * 10)
+        lines = cv2.HoughLinesP(image,
+                                1,
+                                np.pi / 180,
+                                50,
+                                minLineLength=20,
+                                maxLineGap=20)
 
         image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        num_non_horizontal_lines = 0
         if lines is not None:
             for line in lines:
-                rho = line[0][0]
-                theta = line[0][1]
-                a = math.cos(theta)
-                b = math.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                pt1 = (int(x0 - 1000 * b), int(y0 + 1000 * a))
-                pt2 = (int(x0 + 1000 * b), int(y0 - 1000 * a))
-                cv2.line(image_bgr, pt1, pt2, (0, 255, 0), 3, cv2.LINE_AA)
-            print(f"Number of detected lines: {len(lines)}")
+                x1, y1, x2, y2 = line[0]
+                # Ignore close to horizontal lines
+                if abs((y2 - y1) / (x2 - x1)) < 2:
+                    continue
+                num_non_horizontal_lines += 1
+                cv2.line(image_bgr, (x1, y1), (x2, y2), (0, 255, 0), 3,
+                         cv2.LINE_AA)
+            if num_non_horizontal_lines > 0:
+                print(f"Number of detected lines: {num_non_horizontal_lines}")
 
         try:
             image_bgr = self.bridge.cv2_to_imgmsg(image_bgr, "bgr8")
