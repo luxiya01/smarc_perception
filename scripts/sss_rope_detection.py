@@ -20,6 +20,9 @@ class sss_detection:
         self.detection_pub = rospy.Publisher("/sam/detection/rope",
                                              Image,
                                              queue_size=2)
+        self.edge_pub = rospy.Publisher("/sam/detection/rope_edge",
+                                        Image,
+                                        queue_size=2)
         self.bridge = CvBridge()
 
     def callback(self, msg):
@@ -36,7 +39,6 @@ class sss_detection:
     def detect_rope(self):
         image = np.copy(self.sss_img[:self.effective_height, :])
         image = cv2.Canny(image, 100, 150)
-        image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
         lines = cv2.HoughLines(image,
                                1,
                                np.pi / 180,
@@ -44,6 +46,7 @@ class sss_detection:
                                min_theta=0,
                                max_theta=np.pi / 180 * 10)
 
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
         if lines is not None:
             for line in lines:
                 rho = line[0][0]
@@ -60,6 +63,8 @@ class sss_detection:
         try:
             image_bgr = self.bridge.cv2_to_imgmsg(image_bgr, "bgr8")
             self.detection_pub.publish(image_bgr)
+            self.edge_pub.publish(
+                self.bridge.cv2_to_imgmsg(image, "passthrough"))
 
         except CvBridgeError as e:
             print(e)
