@@ -20,6 +20,9 @@ class sss_detection:
         self.detection_pub = rospy.Publisher("/sam/detection/rope",
                                              Image,
                                              queue_size=2)
+        self.nadir_pub = rospy.Publisher("/sam/detection/nadir",
+                                         Image,
+                                         queue_size=2)
         self.edge_pub = rospy.Publisher("/sam/detection/rope_edge",
                                         Image,
                                         queue_size=2)
@@ -34,17 +37,32 @@ class sss_detection:
 
         self.effective_height = min(self.effective_height + 1, self.height)
 
-        self.detect_rope()
-
-    def detect_rope(self):
         image = np.copy(self.sss_img[:self.effective_height, :])
+        self.find_nadir(image)
+        self.detect_rope(image)
+
+    def find_nadir(self, image):
+        image_blurred = cv2.GaussianBlur(image, (5, 5), 0)
+        image_blurred = cv2.Canny(image_blurred, 100, 250)
+        image_blurred_hough_bgr = self._get_hough_lines(
+            image_blurred,
+            min_line_length=int(self.effective_height * .8),
+            max_line_gap=100)
+        self._publish_image(image_blurred_hough_bgr, self.nadir_pub)
+
+    def detect_rope(self, image):
         image = cv2.Canny(image, 100, 150)
+        image_hough_bgr = self._get_hough_lines(image)
+        self._publish_image(image, self.edge_pub)
+        self._publish_image(image_hough_bgr, self.detection_pub)
+
+    def _get_hough_lines(self, image, min_line_length=20, max_line_gap=20):
         lines = cv2.HoughLinesP(image,
                                 1,
                                 np.pi / 180,
                                 50,
-                                minLineLength=20,
-                                maxLineGap=20)
+                                minLineLength=min_line_length,
+                                maxLineGap=max_line_gap)
 
         image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
         num_non_horizontal_lines = 0
@@ -57,14 +75,13 @@ class sss_detection:
                 num_non_horizontal_lines += 1
                 cv2.line(image_bgr, (x1, y1), (x2, y2), (0, 255, 0), 3,
                          cv2.LINE_AA)
-            if num_non_horizontal_lines > 0:
-                print(f"Number of detected lines: {num_non_horizontal_lines}")
+            #if num_non_horizontal_lines > 0:
+            #    print(f"Number of detected lines: {num_non_horizontal_lines}")
+        return image_bgr
 
+    def _publish_image(self, image, publisher):
         try:
-            image_bgr = self.bridge.cv2_to_imgmsg(image_bgr, "bgr8")
-            self.detection_pub.publish(image_bgr)
-            self.edge_pub.publish(
-                self.bridge.cv2_to_imgmsg(image, "passthrough"))
+            publisher.publish(self.bridge.cv2_to_imgmsg(image, "passthrough"))
 
         except CvBridgeError as e:
             print(e)
