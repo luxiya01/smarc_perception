@@ -40,13 +40,21 @@ class DVSFile:
         self.header = None
         self.sss_pings = []
 
-        self._parse_file()
+        # self._parse_file()
 
     def _parse_file(self):
         with open(self.filename, 'rb') as f:
             self.header = self._parse_header(f)
             while True:
-                pass
+                #TODO: complete parse_ping method
+                self._parse_ping(f)
+
+    def _parse_ping(self, fileobj):
+        lat = utils.unpack_struct(fileobj, struct_type='double')
+        lon = utils.unpack_struct(fileobj, struct_type='double')
+        speed = utils.unpack_struct(fileobj, struct_type='float')
+        heading = utils.unpack_struct(fileobj, struct_type='float')
+        #TODO: parse the left and righ pings
 
     def _parse_header(self, fileobj):
         """Read version and V1_FileHeader from the file object"""
