@@ -24,12 +24,12 @@ class SSSPing:
 @dataclass
 class DVSFileHeader:
     """DVS File header. See details in deepvision_sss_driver."""
-    version: int
-    sample_res: float
-    line_rate: float
-    n_samples: int
-    left: bool
-    right: bool
+    version: int = -1
+    sample_res: float = -1
+    line_rate: float = -1
+    n_samples: int = -1
+    left: bool = False
+    right: bool = False
 
 
 class DVSFile:
