@@ -4,23 +4,23 @@ from collections import namedtuple
 STRUCT = {
     'int': {
         'size': 4,
-        'fmt': 'i'
+        'fmt': '@i'
     },
     'uint': {
         'size': 4,
-        'fmt': 'I'
+        'fmt': '@I'
     },
     'bool': {
         'size': 1,
-        'fmt': '?'
+        'fmt': '@?'
     },
     'float': {
         'size': 4,
-        'fmt': 'f'
+        'fmt': '@f'
     },
     'double': {
         'size': 8,
-        'fmt': 'd'
+        'fmt': '@d'
     }
 }
 
@@ -38,6 +38,6 @@ def unpack_channel(fileobj, channel_size):
     """Given a file object, read channel_size number of bytes from the fileobj, unpack
     the resulting buffer as a char array with correct size. Assume native byte order.
     Returns a List(int) of length = channel_size."""
-    fmt = f'{channel_size}B'
+    fmt = f'@{channel_size}B'
     buff = fileobj.read(channel_size)
     return list(struct.unpack(fmt, buff))
