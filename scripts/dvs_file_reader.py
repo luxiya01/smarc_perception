@@ -49,8 +49,8 @@ class DVSFile:
             self.header = self._parse_header(f)
             while True:
                 try:
-                    for ping in self._parse_ping(f):
-                        self.sss_pings.append(ping)
+                    ping = self._parse_ping(f)
+                    self.sss_pings.append(ping)
                 except struct.error as e:
                     pointer_pos = f.tell()
                     file_size = Path(self.filename).stat().st_size
@@ -67,24 +67,29 @@ class DVSFile:
         lon = utils.unpack_struct(fileobj, struct_type='double')
         speed = utils.unpack_struct(fileobj, struct_type='float')
         heading = utils.unpack_struct(fileobj, struct_type='float')
+
+        ping = []
         if self.header.left:
             left_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
-            yield SSSPing(lat=lat,
-                          lon=lon,
-                          speed=speed,
-                          heading=heading,
-                          side=Side.PORT,
-                          ping=left_channel)
+            left_channel_ping = SSSPing(lat=lat,
+                                        lon=lon,
+                                        speed=speed,
+                                        heading=heading,
+                                        side=Side.PORT,
+                                        ping=left_channel)
+            ping.append(left_channel_ping)
         if self.header.right:
             right_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
-            yield SSSPing(lat=lat,
-                          lon=lon,
-                          speed=speed,
-                          heading=heading,
-                          side=Side.STARBOARD,
-                          ping=right_channel)
+            right_channel_ping = SSSPing(lat=lat,
+                                         lon=lon,
+                                         speed=speed,
+                                         heading=heading,
+                                         side=Side.STARBOARD,
+                                         ping=right_channel)
+            ping.append(right_channel_ping)
+            return ping
 
     def _parse_header(self, fileobj):
         """Read version and V1_FileHeader from the file object"""
