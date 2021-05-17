@@ -1,9 +1,11 @@
 from enum import Enum
 from dataclasses import dataclass
 import utils
-from typing import List
+from typing import List, BinaryIO, Tuple, Dict
 import struct
 from pathlib import Path
+from matplotlib import pyplot as plt
+import numpy as np
 
 
 class Side(Enum):
@@ -22,6 +24,15 @@ class SSSPing:
     side: Side
     ping: List[int]
 
+    def plot(self) -> None:
+        plt.figure()
+        plt.plot(self.ping,
+                 linestyle='-',
+                 marker='o',
+                 markersize=1,
+                 linewidth=.5)
+        plt.title(f'SSS Ping, side = {self.side}')
+
 
 @dataclass
 class DVSFileHeader:
@@ -35,12 +46,12 @@ class DVSFileHeader:
 
 
 class DVSFile:
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         self.filename = filename
 
         # Placeholder attributes, filled by _parse_file()
         self.header = None
-        self.sss_pings = []
+        self.sss_pings = {Side.PORT: [], Side.STARBOARD: []}
 
         self._parse_file()
 
@@ -50,7 +61,8 @@ class DVSFile:
             while True:
                 try:
                     ping = self._parse_ping(f)
-                    self.sss_pings.append(ping)
+                    for key, value in ping.items():
+                        self.sss_pings[key].append(value)
                 except struct.error as e:
                     pointer_pos = f.tell()
                     file_size = Path(self.filename).stat().st_size
@@ -60,7 +72,7 @@ class DVSFile:
                     print(f'Parsing completed: {e}')
                     return
 
-    def _parse_ping(self, fileobj):
+    def _parse_ping(self, fileobj: BinaryIO) -> Dict[Side, SSSPing]:
         """Read one side-scan ping from the fileobj. Note that one ping
         may consists of two channels (port and starboard)."""
         lat = utils.unpack_struct(fileobj, struct_type='double')
@@ -68,30 +80,28 @@ class DVSFile:
         speed = utils.unpack_struct(fileobj, struct_type='float')
         heading = utils.unpack_struct(fileobj, struct_type='float')
 
-        ping = []
+        ping = dict()
         if self.header.left:
             left_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
-            left_channel_ping = SSSPing(lat=lat,
-                                        lon=lon,
-                                        speed=speed,
-                                        heading=heading,
-                                        side=Side.PORT,
-                                        ping=left_channel)
-            ping.append(left_channel_ping)
+            ping[Side.PORT] = SSSPing(lat=lat,
+                                      lon=lon,
+                                      speed=speed,
+                                      heading=heading,
+                                      side=Side.PORT,
+                                      ping=left_channel)
         if self.header.right:
             right_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
-            right_channel_ping = SSSPing(lat=lat,
-                                         lon=lon,
-                                         speed=speed,
-                                         heading=heading,
-                                         side=Side.STARBOARD,
-                                         ping=right_channel)
-            ping.append(right_channel_ping)
-            return ping
+            ping[Side.STARBOARD] = SSSPing(lat=lat,
+                                           lon=lon,
+                                           speed=speed,
+                                           heading=heading,
+                                           side=Side.STARBOARD,
+                                           ping=right_channel)
+        return ping
 
-    def _parse_header(self, fileobj):
+    def _parse_header(self, fileobj: BinaryIO) -> DVSFileHeader:
         """Read version and V1_FileHeader from the file object"""
         header = DVSFileHeader()
         header.version = utils.unpack_struct(fileobj, struct_type='uint')
@@ -106,3 +116,55 @@ class DVSFile:
         fileobj.read(2)
 
         return header
+
+    def _get_pings_from_one_side(self, side: Side, start_idx: int,
+                                 end_idx) -> np.ndarray:
+        pings = []
+        for i in range(start_idx, end_idx):
+            pings.append(self.sss_pings[side][i].ping)
+        return np.array(pings)
+
+    def plot_one_side(self,
+                      side: Side,
+                      start_idx: int = 0,
+                      end_idx: int = None) -> np.ndarray:
+        """Plot sss pings between (start_idx, end_idx) from the requested side
+        if exists."""
+        if side not in self.sss_pings.keys():
+            raise ValueError(
+                f'Side {side} does not exist. Available sides: {self.sss_pings.keys()}'
+            )
+        if not end_idx:
+            end_idx = len(self.sss_pings[side])
+        side_pings = self._get_pings_from_one_side(side, start_idx, end_idx)
+        print(side_pings.shape)
+
+        plt.figure()
+        plt.imshow(side_pings)
+        plt.title(f'SSS pings from {side} of {self.filename}')
+        return side_pings
+
+    def plot(self, start_idx: int = 0, end_idx: int = None) -> np.ndarray:
+        """Plot all sss pings in the DVSFile"""
+        if self.header.right and not self.header.left:
+            return self.plot_one_side(side=Side.STARBOARD,
+                                      start_idx=start_idx,
+                                      end_idx=end_idx)
+        if self.header.left and not self.header.right:
+            return self.plot_one_side(side=Side.PORT,
+                                      start_idx=start_idx,
+                                      end_idx=end_idx)
+
+        if not end_idx:
+            end_idx = min(len(self.sss_pings[Side.PORT]),
+                          len(self.sss_pings[Side.STARBOARD]))
+        left_pings = self._get_pings_from_one_side(Side.PORT, start_idx,
+                                                   end_idx)
+        right_pings = self._get_pings_from_one_side(Side.STARBOARD, start_idx,
+                                                    end_idx)
+        sss_image = np.concatenate((np.flip(left_pings, axis=1), right_pings),
+                                   axis=1)
+        plt.figure()
+        plt.imshow(sss_image)
+        plt.title(f'SSS pings from {self.filename}')
+        return sss_image
