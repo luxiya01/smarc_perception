@@ -1,7 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
 import utils
-from typing import List
+from typing import List, BinaryIO
 import struct
 from pathlib import Path
 
@@ -35,7 +35,7 @@ class DVSFileHeader:
 
 
 class DVSFile:
-    def __init__(self, filename):
+    def __init__(self, filename: str):
         self.filename = filename
 
         # Placeholder attributes, filled by _parse_file()
@@ -60,7 +60,7 @@ class DVSFile:
                     print(f'Parsing completed: {e}')
                     return
 
-    def _parse_ping(self, fileobj):
+    def _parse_ping(self, fileobj: BinaryIO) -> List[SSSPing]:
         """Read one side-scan ping from the fileobj. Note that one ping
         may consists of two channels (port and starboard)."""
         lat = utils.unpack_struct(fileobj, struct_type='double')
@@ -89,9 +89,9 @@ class DVSFile:
                                          side=Side.STARBOARD,
                                          ping=right_channel)
             ping.append(right_channel_ping)
-            return ping
+        return ping
 
-    def _parse_header(self, fileobj):
+    def _parse_header(self, fileobj: BinaryIO) -> DVSFileHeader:
         """Read version and V1_FileHeader from the file object"""
         header = DVSFileHeader()
         header.version = utils.unpack_struct(fileobj, struct_type='uint')
