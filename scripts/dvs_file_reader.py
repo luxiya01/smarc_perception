@@ -1,7 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
 import utils
-from typing import List, BinaryIO, Tuple
+from typing import List, BinaryIO, Tuple, Dict
 import struct
 from pathlib import Path
 from matplotlib import pyplot as plt
@@ -51,7 +51,7 @@ class DVSFile:
 
         # Placeholder attributes, filled by _parse_file()
         self.header = None
-        self.sss_pings = []
+        self.sss_pings = {Side.PORT: [], Side.STARBOARD: []}
 
         self._parse_file()
 
@@ -61,7 +61,8 @@ class DVSFile:
             while True:
                 try:
                     ping = self._parse_ping(f)
-                    self.sss_pings.append(ping)
+                    for key, value in ping.items():
+                        self.sss_pings[key].append(value)
                 except struct.error as e:
                     pointer_pos = f.tell()
                     file_size = Path(self.filename).stat().st_size
@@ -71,7 +72,7 @@ class DVSFile:
                     print(f'Parsing completed: {e}')
                     return
 
-    def _parse_ping(self, fileobj: BinaryIO) -> List[SSSPing]:
+    def _parse_ping(self, fileobj: BinaryIO) -> Dict[Side, SSSPing]:
         """Read one side-scan ping from the fileobj. Note that one ping
         may consists of two channels (port and starboard)."""
         lat = utils.unpack_struct(fileobj, struct_type='double')
@@ -79,27 +80,25 @@ class DVSFile:
         speed = utils.unpack_struct(fileobj, struct_type='float')
         heading = utils.unpack_struct(fileobj, struct_type='float')
 
-        ping = []
+        ping = dict()
         if self.header.left:
             left_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
-            left_channel_ping = SSSPing(lat=lat,
-                                        lon=lon,
-                                        speed=speed,
-                                        heading=heading,
-                                        side=Side.PORT,
-                                        ping=left_channel)
-            ping.append(left_channel_ping)
+            ping[Side.PORT] = SSSPing(lat=lat,
+                                      lon=lon,
+                                      speed=speed,
+                                      heading=heading,
+                                      side=Side.PORT,
+                                      ping=left_channel)
         if self.header.right:
             right_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
-            right_channel_ping = SSSPing(lat=lat,
-                                         lon=lon,
-                                         speed=speed,
-                                         heading=heading,
-                                         side=Side.STARBOARD,
-                                         ping=right_channel)
-            ping.append(right_channel_ping)
+            ping[Side.STARBOARD] = SSSPing(lat=lat,
+                                           lon=lon,
+                                           speed=speed,
+                                           heading=heading,
+                                           side=Side.STARBOARD,
+                                           ping=right_channel)
         return ping
 
     def _parse_header(self, fileobj: BinaryIO) -> DVSFileHeader:
@@ -118,39 +117,12 @@ class DVSFile:
 
         return header
 
-    def _check_side_exists(self, side: Side) -> Tuple[bool, str]:
-        """Used by method plot_one_side. Raise ValueError if the side given
-        is invalid"""
-        if side not in {Side.PORT, Side.STARBOARD}:
-            err = f'Unknown side {side}. Please specify {Side.PORT} or {Side.STARBOARD}.'
-            return False, err
-
-        request_left_failed = side == Side.PORT and not self.header.left
-        request_right_failed = side == Side.STARBOARD and not self.header.right
-
-        if request_left_failed or request_right_failed:
-            err = f'The DVSFile {self.filename} does not contain {side}'
-            return False, err
-        return True, ''
-
-    def _get_ping_array_from_side(self,
-                                  side: Side,
-                                  start_idx: int = 0,
-                                  end_idx: int = None) -> np.ndarray:
-        """Returns a numpy array of pings between (start_idx, end_idx) for
-        the specified side"""
-        if end_idx is None:
-            end_idx = len(self.sss_pings)
-        print(f'start_idx = {start_idx}, end_idx = {end_idx}')
-
-        side_pings = []
-        for idx, ping in enumerate(self.sss_pings):
-            if idx < start_idx or idx >= end_idx:
-                continue
-            for ping_part in ping:
-                if ping_part.side == side:
-                    side_pings.append(ping_part.ping)
-        return np.array(side_pings)
+    def _get_pings_from_one_side(self, side: Side, start_idx: int,
+                                 end_idx) -> np.ndarray:
+        pings = []
+        for i in range(start_idx, end_idx):
+            pings.append(self.sss_pings[side][i].ping)
+        return np.array(pings)
 
     def plot_one_side(self,
                       side: Side,
@@ -158,10 +130,14 @@ class DVSFile:
                       end_idx: int = None) -> np.ndarray:
         """Plot sss pings between (start_idx, end_idx) from the requested side
         if exists."""
-        success, err = self._check_side_exists(side)
-        if not success:
-            raise ValueError(err)
-        side_pings = self._get_ping_array_from_side(side, start_idx, end_idx)
+        if side not in self.sss_pings.keys():
+            raise ValueError(
+                f'Side {side} does not exist. Available sides: {self.sss_pings.keys()}'
+            )
+        if not end_idx:
+            end_idx = len(self.sss_pings[side])
+        side_pings = self._get_pings_from_one_side(side, start_idx, end_idx)
+        print(side_pings.shape)
 
         plt.figure()
         plt.imshow(side_pings)
@@ -178,12 +154,14 @@ class DVSFile:
             return self.plot_one_side(side=Side.PORT,
                                       start_idx=start_idx,
                                       end_idx=end_idx)
-        left_pings = self._get_ping_array_from_side(side=Side.PORT,
-                                                    start_idx=start_idx,
-                                                    end_idx=end_idx)
-        right_pings = self._get_ping_array_from_side(side=Side.STARBOARD,
-                                                     start_idx=start_idx,
-                                                     end_idx=end_idx)
+
+        if not end_idx:
+            end_idx = min(len(self.sss_pings[Side.PORT]),
+                          len(self.sss_pings[Side.STARBOARD]))
+        left_pings = self._get_pings_from_one_side(Side.PORT, start_idx,
+                                                   end_idx)
+        right_pings = self._get_pings_from_one_side(Side.STARBOARD, start_idx,
+                                                    end_idx)
         sss_image = np.concatenate((np.flip(left_pings, axis=1), right_pings),
                                    axis=1)
         plt.figure()
