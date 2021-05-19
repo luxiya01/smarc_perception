@@ -17,6 +17,7 @@ class Side(Enum):
 @dataclass
 class SSSPing:
     """A side-scan sonar ping."""
+    index: int  #ping index in the file
     lat: float  #Ctype double in V1_Position in deepvision_sss_driver
     lon: float  #Ctype double in V1_Position deepvision_sss_driver
     speed: float
@@ -24,14 +25,15 @@ class SSSPing:
     side: Side
     ping: List[int]
 
-    def plot(self) -> None:
+    def plot(self, normalised: bool = True) -> None:
+        ping = np.array(self.ping)
+        if normalised:
+            ping = (ping - min(ping)) / (max(ping) - min(ping))
         plt.figure()
-        plt.plot(self.ping,
-                 linestyle='-',
-                 marker='o',
-                 markersize=1,
-                 linewidth=.5)
-        plt.title(f'SSS Ping, side = {self.side}')
+        plt.plot(ping, linestyle='-', marker='o', markersize=1, linewidth=.5)
+        plt.title(
+            f'SSS Ping index = {self.index}, side = {self.side}, normalised = {normalised}'
+        )
 
 
 @dataclass
@@ -58,11 +60,13 @@ class DVSFile:
     def _parse_file(self):
         with open(self.filename, 'rb') as f:
             self.header = self._parse_header(f)
+            index = 0
             while True:
                 try:
-                    ping = self._parse_ping(f)
+                    ping = self._parse_ping(f, index)
                     for key, value in ping.items():
                         self.sss_pings[key].append(value)
+                    index += 1
                 except struct.error as e:
                     pointer_pos = f.tell()
                     file_size = Path(self.filename).stat().st_size
@@ -72,7 +76,8 @@ class DVSFile:
                     print(f'Parsing completed: {e}')
                     return
 
-    def _parse_ping(self, fileobj: BinaryIO) -> Dict[Side, SSSPing]:
+    def _parse_ping(self, fileobj: BinaryIO,
+                    index: int) -> Dict[Side, SSSPing]:
         """Read one side-scan ping from the fileobj. Note that one ping
         may consists of two channels (port and starboard)."""
         lat = utils.unpack_struct(fileobj, struct_type='double')
@@ -89,7 +94,8 @@ class DVSFile:
                                       speed=speed,
                                       heading=heading,
                                       side=Side.PORT,
-                                      ping=left_channel)
+                                      ping=left_channel,
+                                      index=index)
         if self.header.right:
             right_channel = utils.unpack_channel(
                 fileobj, channel_size=self.header.n_samples)
@@ -98,7 +104,8 @@ class DVSFile:
                                            speed=speed,
                                            heading=heading,
                                            side=Side.STARBOARD,
-                                           ping=right_channel)
+                                           ping=right_channel,
+                                           index=index)
         return ping
 
     def _parse_header(self, fileobj: BinaryIO) -> DVSFileHeader:
