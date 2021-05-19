@@ -124,10 +124,23 @@ class DVSFile:
             pings.append(self.sss_pings[side][i].ping)
         return np.array(pings)
 
-    def plot_one_side(self,
-                      side: Side,
-                      start_idx: int = 0,
-                      end_idx: int = None) -> np.ndarray:
+    def _imshow(self, sss_pings: np.ndarray, start_idx: int, end_idx: int,
+                title: str, figsize: tuple) -> None:
+        """Plot multiple SSSPings as an heatmap."""
+        num_pings, num_channels = sss_pings.shape
+
+        plt.figure(figsize=figsize)
+        plt.imshow(sss_pings,
+                   origin='lower',
+                   extent=(0, num_channels, start_idx, end_idx))
+        plt.title(title)
+
+    def plot_one_side(
+            self,
+            side: Side,
+            start_idx: int = 0,
+            end_idx: int = None,
+            figsize: tuple = (5, 10)) -> np.ndarray:
         """Plot sss pings between (start_idx, end_idx) from the requested side
         if exists."""
         if side not in self.sss_pings.keys():
@@ -137,14 +150,16 @@ class DVSFile:
         if not end_idx:
             end_idx = len(self.sss_pings[side])
         side_pings = self._get_pings_from_one_side(side, start_idx, end_idx)
-        print(side_pings.shape)
 
-        plt.figure()
-        plt.imshow(side_pings)
-        plt.title(f'SSS pings from {side} of {self.filename}')
+        title = f'SSS pings from {side} of {self.filename}'
+        self._imshow(side_pings, start_idx, end_idx, title, figsize)
+
         return side_pings
 
-    def plot(self, start_idx: int = 0, end_idx: int = None) -> np.ndarray:
+    def plot(self,
+             start_idx: int = 0,
+             end_idx: int = None,
+             figsize: tuple = (10, 20)) -> np.ndarray:
         """Plot all sss pings in the DVSFile"""
         if self.header.right and not self.header.left:
             return self.plot_one_side(side=Side.STARBOARD,
@@ -164,7 +179,6 @@ class DVSFile:
                                                     end_idx)
         sss_image = np.concatenate((np.flip(left_pings, axis=1), right_pings),
                                    axis=1)
-        plt.figure()
-        plt.imshow(sss_image)
-        plt.title(f'SSS pings from {self.filename}')
+        title = f'SSS pings from {self.filename}'
+        self._imshow(sss_image, start_idx, end_idx, title, figsize)
         return sss_image
