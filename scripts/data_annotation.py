@@ -1,7 +1,22 @@
 import numpy as np
 import ruptures as rpt
-from dvs_file_reader import SSSPing
-from typing import List
+from dataclasses import dataclass
+from dvs_file_reader import SSSPing, Side, DVSFile
+from typing import List, Tuple, Dict
+
+
+@dataclass
+class BoundingBox:
+    """1D bounding box for an object"""
+    start_idx: int
+    end_idx: int
+
+
+@dataclass
+class SSSPingAnnotated(SSSPing):
+    """SSSPing with annotation"""
+    # annotation[object_id] = BoundingBox(start_idx, end_idx)
+    annotation: Dict[int, BoundingBox]
 
 
 def window_sliding_segmentation(ping: SSSPing,
