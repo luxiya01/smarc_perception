@@ -8,6 +8,20 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 
+class ObjectID(Enum):
+    """ObjectID for object detection"""
+    NADIR = 0
+    BUOY = 1
+    ROPE = 2
+
+
+@dataclass
+class BoundingBox:
+    """1D bounding box for an object"""
+    start_idx: int
+    end_idx: int
+
+
 class Side(Enum):
     """The side-scan sonar ping side (port or starboard)"""
     PORT = 0
@@ -24,6 +38,7 @@ class SSSPing:
     heading: float
     side: Side
     ping: List[int]
+    annotation: Dict[ObjectID, BoundingBox] = None
 
     def get_ping_array(self, normalised: bool = True) -> np.ndarray:
         ping = np.array(self.ping)

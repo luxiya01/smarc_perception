@@ -1,25 +1,20 @@
-import numpy as np
-import ruptures as rpt
 from dataclasses import dataclass
-from dvs_file_reader import SSSPing, Side, DVSFile
-from typing import List, Tuple, Dict
+from enum import Enum
+from typing import List, Dict
+import ruptures as rpt
+from dvs_file_reader import SSSPing, Side, DVSFile, ObjectID, BoundingBox
 
 
-@dataclass
-class BoundingBox:
-    """1D bounding box for an object"""
-    start_idx: int
-    end_idx: int
-
-
-@dataclass
-class SSSPingAnnotated(SSSPing):
-    """SSSPing with annotation"""
-    # annotation[object_id] = BoundingBox(start_idx, end_idx)
-    annotation: Dict[int, BoundingBox]
+def _update_moving_average(current_average: int, new_value: int, seq_len: int):
+    """Calculate moving average online."""
+    if current_average is None:
+        return new_value
+    return int(current_average + (new_value - current_average) / (seq_len))
 
 
 def annotate_rope(ping: SSSPing, nadir: BoundingBox) -> BoundingBox:
+    """Given the tentative nadir_annotation, provide tentative rope
+    annotation by segmenting the nadir region."""
     bkps = window_sliding_segmentation(ping=ping,
                                        start_idx=40,
                                        end_idx=nadir.end_idx,
@@ -64,10 +59,10 @@ def window_sliding_segmentation(ping: SSSPing,
                                 n_bkps: int = 3) -> List[int]:
     """Use window sliding method to segment the input SSSPing
     into (n_bkps + 1) segments. Return the suggested break points."""
-    if not end_idx:
-        end_idx = len(ping.ping)
-
     signal = ping.get_ping_array(normalised=True)
+    if not end_idx:
+        end_idx = signal.shape[0]
+
     algo = rpt.Window(width=width, model=model).fit(signal[start_idx:end_idx])
     bkps = algo.predict(n_bkps=n_bkps)
     bkps = [bkps[i] + start_idx for i in range(len(bkps))]
