@@ -25,10 +25,14 @@ class SSSPing:
     side: Side
     ping: List[int]
 
-    def plot(self, normalised: bool = True) -> None:
+    def get_ping_array(self, normalised: bool = True) -> np.ndarray:
         ping = np.array(self.ping)
         if normalised:
             ping = (ping - min(ping)) / (max(ping) - min(ping))
+        return ping
+
+    def plot(self, normalised: bool = True) -> None:
+        ping = self.get_ping_array(normalised=normalised)
         plt.figure()
         plt.plot(ping, linestyle='-', marker='o', markersize=1, linewidth=.5)
         plt.title(
