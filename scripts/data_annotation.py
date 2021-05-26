@@ -19,6 +19,17 @@ class SSSPingAnnotated(SSSPing):
     annotation: Dict[int, BoundingBox]
 
 
+def annotate_nadir(ping: SSSPing) -> BoundingBox:
+    """Use window sliding segmentation to provide tentative
+    nadir location annotation. Returns the start and end index
+    of nadir region, assuming nadir always starts at index 0."""
+    bkps = window_sliding_segmentation(ping=ping,
+                                       start_idx=100,
+                                       width=100,
+                                       n_bkps=1)
+    return BoundingBox(start_idx=0, end_idx=bkps[0])
+
+
 def window_sliding_segmentation(ping: SSSPing,
                                 start_idx: int = 20,
                                 end_idx: int = None,
