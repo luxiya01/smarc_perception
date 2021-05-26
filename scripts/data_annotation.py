@@ -19,6 +19,23 @@ class SSSPingAnnotated(SSSPing):
     annotation: Dict[int, BoundingBox]
 
 
+def annotate_buoy(ping: SSSPing, nadir: BoundingBox) -> BoundingBox:
+    """Given the tentative nadir_annotation, provide tentative buoy
+    annotation by segmenting the nadir region. Return None if no
+    buoy detected."""
+    buoy_width = 15
+    bkps = window_sliding_segmentation(ping=ping,
+                                       start_idx=40,
+                                       end_idx=nadir.end_idx,
+                                       width=buoy_width,
+                                       n_bkps=2)
+
+    # Check whether the segmentation is likely to be a buoy
+    if bkps[1] - bkps[0] > buoy_width * 2:
+        return None
+    return BoundingBox(start_idx=bkps[0], end_idx=bkps[1])
+
+
 def annotate_nadir(ping: SSSPing) -> BoundingBox:
     """Use window sliding segmentation to provide tentative
     nadir location annotation. Returns the start and end index
