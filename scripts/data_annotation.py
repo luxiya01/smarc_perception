@@ -19,6 +19,15 @@ class SSSPingAnnotated(SSSPing):
     annotation: Dict[int, BoundingBox]
 
 
+def annotate_rope(ping: SSSPing, nadir: BoundingBox) -> BoundingBox:
+    bkps = window_sliding_segmentation(ping=ping,
+                                       start_idx=40,
+                                       end_idx=nadir.end_idx,
+                                       width=4,
+                                       n_bkps=1)
+    return BoundingBox(start_idx=bkps[0] - 1, end_idx=bkps[0] + 1)
+
+
 def annotate_buoy(ping: SSSPing, nadir: BoundingBox) -> BoundingBox:
     """Given the tentative nadir_annotation, provide tentative buoy
     annotation by segmenting the nadir region. Return None if no
@@ -58,7 +67,7 @@ def window_sliding_segmentation(ping: SSSPing,
     if not end_idx:
         end_idx = len(ping.ping)
 
-    signal = np.array(ping.ping)
+    signal = ping.get_ping_array(normalised=True)
     algo = rpt.Window(width=width, model=model).fit(signal[start_idx:end_idx])
     bkps = algo.predict(n_bkps=n_bkps)
     bkps = [bkps[i] + start_idx for i in range(len(bkps))]
