@@ -1,26 +1,12 @@
 from enum import Enum
 from dataclasses import dataclass
-import utils
 from typing import List, BinaryIO, Tuple, Dict
 import struct
 from pathlib import Path
 from matplotlib import pyplot as plt
 from matplotlib import axes
 import numpy as np
-
-
-class ObjectID(Enum):
-    """ObjectID for object detection"""
-    NADIR = 0
-    BUOY = 1
-    ROPE = 2
-
-
-@dataclass
-class BoundingBox:
-    """1D bounding box for an object"""
-    start_idx: int
-    end_idx: int
+import utils
 
 
 class Side(Enum):
