@@ -5,6 +5,7 @@ from typing import List, BinaryIO, Tuple, Dict
 import struct
 from pathlib import Path
 from matplotlib import pyplot as plt
+from matplotlib import axes
 import numpy as np
 
 
@@ -38,7 +39,6 @@ class SSSPing:
     heading: float
     side: Side
     ping: List[int]
-    annotation: Dict[ObjectID, BoundingBox] = None
 
     def get_ping_array(self, normalised: bool = True) -> np.ndarray:
         ping = np.array(self.ping)
@@ -151,22 +151,22 @@ class DVSFile:
         return np.array(pings)
 
     def _imshow(self, sss_pings: np.ndarray, start_idx: int, end_idx: int,
-                title: str, figsize: tuple) -> None:
+                title: str, ax: axes.Axes) -> None:
         """Plot multiple SSSPings as an heatmap."""
         num_pings, num_channels = sss_pings.shape
 
-        plt.figure(figsize=figsize)
-        plt.imshow(sss_pings,
-                   origin='lower',
-                   extent=(0, num_channels, start_idx, end_idx))
-        plt.title(title)
+        ax.imshow(sss_pings,
+                  origin='lower',
+                  extent=(0, num_channels, start_idx, end_idx))
+        ax.set_title(title)
 
     def plot_one_side(
-            self,
-            side: Side,
-            start_idx: int = 0,
-            end_idx: int = None,
-            figsize: tuple = (5, 10)) -> np.ndarray:
+        self,
+        side: Side,
+        start_idx: int = 0,
+        end_idx: int = None,
+        figsize: tuple = (5, 10)
+    ) -> Tuple[np.ndarray, axes.Axes]:
         """Plot sss pings between (start_idx, end_idx) from the requested side
         if exists."""
         if side not in self.sss_pings.keys():
@@ -178,14 +178,17 @@ class DVSFile:
         side_pings = self._get_pings_from_one_side(side, start_idx, end_idx)
 
         title = f'SSS pings from {side} of {self.filename}'
-        self._imshow(side_pings, start_idx, end_idx, title, figsize)
+        fig, ax = plt.subplots(figsize=figsize)
+        self._imshow(side_pings, start_idx, end_idx, title, ax)
 
-        return side_pings
+        return side_pings, ax
 
-    def plot(self,
-             start_idx: int = 0,
-             end_idx: int = None,
-             figsize: tuple = (10, 20)) -> np.ndarray:
+    def plot(
+        self,
+        start_idx: int = 0,
+        end_idx: int = None,
+        figsize: tuple = (10, 20)
+    ) -> Tuple[np.ndarray, axes.Axes]:
         """Plot all sss pings in the DVSFile"""
         if self.header.right and not self.header.left:
             return self.plot_one_side(side=Side.STARBOARD,
@@ -206,5 +209,6 @@ class DVSFile:
         sss_image = np.concatenate((np.flip(left_pings, axis=1), right_pings),
                                    axis=1)
         title = f'SSS pings from {self.filename}'
-        self._imshow(sss_image, start_idx, end_idx, title, figsize)
-        return sss_image
+        fig, ax = plt.subplots(figsize=figsize)
+        self._imshow(sss_image, start_idx, end_idx, title, ax)
+        return sss_image, ax
