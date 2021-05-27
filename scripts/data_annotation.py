@@ -1,15 +1,73 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Dict
+from typing import Dict, List, Tuple
 import ruptures as rpt
-from dvs_file_reader import SSSPing, Side, DVSFile, ObjectID, BoundingBox
+from dvs_file_reader import SSSPing, DVSFile, Side
 
 
-def _update_moving_average(current_average: int, new_value: int, seq_len: int):
-    """Calculate moving average online."""
-    if current_average is None:
-        return new_value
-    return int(current_average + (new_value - current_average) / (seq_len))
+class ObjectID(Enum):
+    """ObjectID for object detection"""
+    NADIR = 0
+    ROPE = 1
+    BUOY = 2
+
+
+@dataclass
+class BoundingBox:
+    """1D bounding box for an object"""
+    start_idx: int
+    end_idx: int
+
+
+def annotate_dvsfile(filename: str):
+    dvsfile = DVSFile(filename)
+    continuity_constraint = 10
+
+    for side, pings in dvsfile.sss_pings.items():
+        annotation = open(f'{filename}.{side}.annotation', 'w')
+        print(
+            f'Annotating file {filename}, side = {side}, length = {len(pings)}'
+        )
+        prev_nadir_window = []
+
+        for index, ping in enumerate(pings):
+            ping_annotation = {}
+            if index % 200 == 0:
+                print(f'\tindex = {index}')
+
+            nadir = annotate_nadir(ping)
+            nadir, prev_nadir_window = _check_bbox_for_continuity_and_update_moving_window(
+                nadir,
+                prev_nadir_window,
+                continuity_constraint,
+                max_window_len=50)
+            ping_annotation[ObjectID.NADIR] = nadir
+
+            annotation.write(_format_annotation_for_ping(ping_annotation))
+    annotation.close()
+
+
+def _check_bbox_for_continuity_and_update_moving_window(
+    bbox: BoundingBox, window: List[int], continuity_constraint: int,
+    max_window_len: int):
+
+    window.append(bbox.end_idx)
+    if len(window) >= max_window_len:
+        window.pop(0)
+    window_average = int(sum(window) / len(window))
+
+    if abs(bbox.end_idx - window_average) > continuity_constraint:
+        bbox.end_idx = window[-2]
+    return bbox, window
+
+
+def _format_annotation_for_ping(ping_annotation: Dict[ObjectID, BoundingBox]):
+    annotation_str = []
+    fmt = lambda k, v: f'{k.value} {v.start_idx} {v.end_idx}'
+    for k, v in ping_annotation.items():
+        annotation_str.append(fmt(k, v))
+    annotation_str = ' '.join(annotation_str)
+    return f'{annotation_str}\n'
 
 
 def annotate_rope(ping: SSSPing, nadir: BoundingBox) -> BoundingBox:
