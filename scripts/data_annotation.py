@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
+import os
 from typing import Dict, List, Tuple
+from matplotlib import pyplot as plt
 import ruptures as rpt
 from dvs_file_reader import SSSPing, DVSFile, Side
 
@@ -19,7 +21,27 @@ class BoundingBox:
     end_idx: int
 
 
-def annotate_dvsfile(filename: str):
+def plot_nadir_annotations(data_dir: str, annotation_dir: str):
+    dvsfiles = [x for x in os.listdir(data_dir) if x.split('.')[-1] == 'dvs']
+
+    for filename in dvsfiles:
+        dvsfile = DVSFile(os.path.join(data_dir, filename))
+        nadir = {Side.PORT: {}, Side.STARBOARD: {}}
+        for side, nadir_dict in nadir.items():
+            annotation_file = os.path.join(annotation_dir,
+                                           f'{filename}.{side}.annotation')
+            with open(annotation_file, 'r') as f:
+                for i, line in enumerate(f):
+                    nadir_dict[i] = [int(x) for x in line.split(' ')][-1]
+            _, ax = dvsfile.plot_one_side(side)
+            ax.scatter(x=list(nadir_dict.values()),
+                       y=list(nadir_dict.keys()),
+                       s=2,
+                       c='y')
+    plt.show()
+
+
+def annotate_nadir_for_dvsfile(filename: str):
     dvsfile = DVSFile(filename)
     continuity_constraint = 10
 
