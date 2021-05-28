@@ -21,7 +21,7 @@ class BoundingBox:
     end_idx: int
 
 
-def plot_nadir_annotations(data_dir: str, annotation_dir: str):
+def plot_nadir_annotations(data_dir: str, annotation_dir: str) -> None:
     dvsfiles = [x for x in os.listdir(data_dir) if x.split('.')[-1] == 'dvs']
 
     for filename in dvsfiles:
@@ -41,7 +41,7 @@ def plot_nadir_annotations(data_dir: str, annotation_dir: str):
     plt.show()
 
 
-def annotate_nadir_for_dvsfile(filename: str):
+def annotate_nadir_for_dvsfile(filename: str) -> None:
     dvsfile = DVSFile(filename)
     continuity_constraint = 10
 
@@ -70,8 +70,8 @@ def annotate_nadir_for_dvsfile(filename: str):
 
 
 def _check_bbox_for_continuity_and_update_moving_window(
-    bbox: BoundingBox, window: List[int], continuity_constraint: int,
-    max_window_len: int):
+        bbox: BoundingBox, window: List[int], continuity_constraint: int,
+        max_window_len: int) -> Tuple[BoundingBox, List[int]]:
 
     window.append(bbox.end_idx)
     if len(window) >= max_window_len:
@@ -83,7 +83,8 @@ def _check_bbox_for_continuity_and_update_moving_window(
     return bbox, window
 
 
-def _format_annotation_for_ping(ping_annotation: Dict[ObjectID, BoundingBox]):
+def _format_annotation_for_ping(
+        ping_annotation: Dict[ObjectID, BoundingBox]) -> str:
     annotation_str = []
     fmt = lambda k, v: f'{k.value} {v.start_idx} {v.end_idx}'
     for k, v in ping_annotation.items():
