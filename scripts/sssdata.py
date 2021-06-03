@@ -61,15 +61,14 @@ class SSSData(Dataset):
                  linewidth=.5)
         plt.title(f'{self.filename} {self.side} ping {idx}')
 
-        for dim in range(data['label'].shape[1]):
-            pos = np.nonzero(data['label'][:, dim])[0]
-            if len(pos) <= 0:
-                continue
-            plt.vlines([pos.min(), pos.max()],
-                       0,
-                       1,
-                       colors=[self.plot_utils[dim]['color']],
-                       label=self.plot_utils[dim]['label'])
+        for i, pos in enumerate(data['label'][:, 0]):
+            if pos > 0:
+                plt.vlines(pos,
+                           0,
+                           1,
+                           colors=[self.plot_utils[i]['color']],
+                           label=self.plot_utils[i]['label'])
+
         plt.legend()
         plt.show()
 
@@ -85,16 +84,16 @@ class SSSData(Dataset):
 
         annotation = self.annotations[idx]
 
-        label = np.zeros((ping_padded.shape[0], 3))
+        label = np.zeros((3, 1))
         for annotation_lst in annotation:
-            dim, start_idx, end_idx = annotation_lst
+            dim, _, end_idx = annotation_lst
+            label[dim] = end_idx
 
-            if dim == ObjectID.NADIR.value:
-                label[end_idx, dim] = 1
-            else:
-                label[end_idx, dim] = 1
-
-        sample = {'data': ping_padded, 'label': label}
+        sample = {
+            'data': ping_padded,
+            'label': label,
+            'label_scaled': label / ping_padded.shape[0]
+        }
         if self.transform:
             sample = self.transform(sample)
         return sample
@@ -103,17 +102,17 @@ class SSSData(Dataset):
 class ToTensor:
     """Convert ndarrays in SSSData items to Tensors"""
     def __call__(self, sample):
-        ping, label = sample['data'], sample['label']
+        ping, label, label_scaled = sample['data'], sample['label'], sample[
+            'label_scaled']
 
         # numpy ping shape: L x C(1) -> torch ping shape: C(1) x L
         ping = ping.transpose(1, 0)
-        # numpy label shape: L x C(3) -> torch label shape: C(3) x L
+
+        # (3, 1) -> (1, 3)
         label = label.transpose(1, 0)
+        label_scaled = label_scaled.transpose(1, 0)
         return {
             'data': torch.from_numpy(ping).float(),
-            'label': torch.from_numpy(label).float()
+            'label': torch.from_numpy(label).float(),
+            'label_scaled': torch.from_numpy(label_scaled).float()
         }
-
-
-class MockObjects:
-    pass
