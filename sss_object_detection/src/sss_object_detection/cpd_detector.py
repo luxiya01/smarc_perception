@@ -5,9 +5,17 @@ from sss_object_detection.consts import ObjectID
 
 class CPDetector:
     """Change point detector using window sliding for segmentation"""
-    def __init__(self):
-        self.buoy_width = 15
-        self.min_mean_diff_ratio = 1.5
+    def __init__(self,
+                 buoy_width=15,
+                 buoy_ratio=1.5,
+                 rope_ratio=1.5,
+                 nadir_ratio=1.2):
+        # config for noisy data: buoy_ratio=1.2, rope_ratio=1.1, nadir_ratio=1.2
+        # config for noisy data: buoy_ratio=1.5, rope_ratio=1.5, nadir_ratio=1.2
+        self.buoy_width = buoy_width
+        self.buoy_ratio = buoy_ratio
+        self.rope_ratio = rope_ratio
+        self.nadir_ratio = nadir_ratio
 
     def detect(self, ping):
         """Detection returns a dictionary with key being ObjectID and
@@ -16,15 +24,18 @@ class CPDetector:
         detections = {}
 
         nadir_idx = self._detect_nadir(ping)
-        # rope = self._detect_rope(ping, nadir_idx)
+        if not nadir_idx:
+            return detections
+
+        rope = self._detect_rope(ping, nadir_idx)
         buoy = self._detect_buoy(ping, nadir_idx)
 
-        # detections[ObjectID.NADIR] = {'pos': nadir_idx, 'confidence': .9}
-        #       if rope:
-        #           detections[ObjectID.ROPE] = {
-        #               'pos': rope[0][0],
-        #               'confidence': rope[1]
-        #           }
+        detections[ObjectID.NADIR] = {'pos': nadir_idx, 'confidence': .9}
+        if rope:
+            detections[ObjectID.ROPE] = {
+                'pos': rope[0][0],
+                'confidence': rope[1]
+            }
         if buoy:
             detections[ObjectID.BUOY] = {
                 'pos': buoy[0][0],
@@ -40,6 +51,11 @@ class CPDetector:
         surrounding_mean = (np.mean(prev_window) + np.mean(post_window)) / 2
         return region_mean / surrounding_mean
 
+    def _compare_before_and_after_bkps(self, ping, bkps, window_size=50):
+        prev_window = ping[max(bkps[0] - window_size, 0):bkps[0]]
+        post_window = ping[bkps[1]:min(bkps[1] + window_size, ping.shape[0])]
+        return np.mean(post_window) / np.mean(prev_window)
+
     def _detect_rope(self, ping, nadir_idx):
         """Given the tentative nadir_annotation, provide tentative rope
         annotation by segmenting the nadir region. Return None if the
@@ -52,7 +68,7 @@ class CPDetector:
         bkps = [bkps[0] - 1, bkps[0] + 1]
         mean_diff_ratio = self._compare_region_with_surrounding(ping, bkps)
 
-        if mean_diff_ratio < self.min_mean_diff_ratio:
+        if mean_diff_ratio < self.rope_ratio:
             return None
         confidence = 1 / mean_diff_ratio
         return bkps, confidence
@@ -73,7 +89,7 @@ class CPDetector:
             return None
         mean_diff_ratio = self._compare_region_with_surrounding(ping, bkps)
 
-        if mean_diff_ratio < self.min_mean_diff_ratio:
+        if mean_diff_ratio < self.buoy_ratio:
             return None
         confidence = 1 / mean_diff_ratio
         return bkps, confidence
@@ -86,6 +102,12 @@ class CPDetector:
                                                  start_idx=100,
                                                  end_idx=ping.shape[0],
                                                  width=100)
+        bkps[1] = bkps[0]
+        diff_ratio = self._compare_before_and_after_bkps(ping,
+                                                         bkps,
+                                                         window_size=100)
+        if diff_ratio < self.nadir_ratio:
+            return None
         return bkps[0]
 
     def _window_sliding_segmentation(self, ping, n_bkps, start_idx, end_idx,
