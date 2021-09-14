@@ -175,7 +175,7 @@ class sim_sss_detector:
         while trans is None:
             try:
                 trans = self.tf_buffer.lookup_transform(
-                    to_frame, from_frame, rospy.Time())
+                    to_frame, from_frame, rospy.Time(0), rospy.Duration(3.0))
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
                     tf2_ros.ExtrapolationException) as error:
                 print('Failed to transform. Error: {}'.format(error))
